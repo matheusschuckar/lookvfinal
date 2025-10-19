@@ -3,14 +3,20 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 
 // ===== Tipagens =====
+type GridFilter = {
+  featured?: boolean;
+  category?: string;
+};
+
 export type Block =
   | { type: "hero"; image?: string; title?: string; subtitle?: string; show_text?: boolean }
   | { type: "bio" }
   | { type: "category_menu"; source?: "product_categories" | "custom"; items?: string[] }
-  | { type: "grid"; rows: number; cols: number; filter?: Record<string, any> }
+  | { type: "grid"; rows: number; cols: number; filter?: GridFilter }
   | { type: "banner"; image: string; title?: string; subtitle?: string; href?: string };
 
 export type StoreLayout = { blocks?: Block[] } | null;
@@ -142,8 +148,8 @@ export default function StorePage() {
             setProducts(byStore);
           }
         }
-      } catch (e: any) {
-        if (!cancelled) setErr(e.message ?? "Erro ao carregar");
+      } catch (e: unknown) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : "Erro ao carregar");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -158,13 +164,7 @@ export default function StorePage() {
     const set = new Set(products.map((p) => (p.category || "").toLowerCase()).filter(Boolean));
     return Array.from(set).sort();
   }, [products]);
-  const sizeOptions = useMemo(() => {
-    const set = new Set<string>();
-    products.forEach((p) => toSizeList(p.sizes).forEach((s) => set.add(s)));
-    const order = ["PP", "P", "M", "G", "GG"];
-    const rest = Array.from(set).filter((s) => !order.includes(s)).sort();
-    return [...order.filter((s) => set.has(s)), ...rest];
-  }, [products]);
+  // sizeOptions foi removido (não utilizado)
 
   const anyFilterActive =
     selectedGenders.size > 0 || selectedSizes.size > 0 || selectedCategories.size > 0;
@@ -210,7 +210,16 @@ export default function StorePage() {
     return (
       <section className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
         {image ? (
-          <img src={image} alt={title || "Hero"} className="w-full h-52 object-cover" />
+          <div className="relative w-full h-52">
+            <Image
+              src={image}
+              alt={title || "Hero"}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 800px"
+              unoptimized
+            />
+          </div>
         ) : null}
         {showText && (
           <div className="p-4">
@@ -271,7 +280,7 @@ export default function StorePage() {
     );
   }
 
-  function selectForGrid(filter: Record<string, any> | undefined, max: number): Product[] {
+  function selectForGrid(filter: GridFilter | undefined, max: number): Product[] {
     let list = filtered;
     if (filter?.featured != null) {
       list = list.filter((p) => Boolean(p.featured) === Boolean(filter.featured));
@@ -297,32 +306,48 @@ export default function StorePage() {
     return (
       <section className="mt-4">
         <div className="grid grid-cols-2 gap-4">
-          {items.map((p) => (
-            <Link
-              key={p.id}
-              href={`/product/${p.id}`}
-              className="rounded-2xl bg-white shadow-md overflow-hidden hover:shadow-lg transition border border-gray-100"
-            >
-              <div className="relative">
-                <span
-                  className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow border"
-                  style={{ backgroundColor: "#8B5E3C", borderColor: "#6F4A2D" }}
-                >
-                  {formatBRL(p.price_tag)}
-                </span>
-                <img src={firstImage(p.photo_url)} alt={p.name} className="w-full h-44 object-cover" />
-              </div>
-              <div className="p-3">
-                {p.category ? (
-                  <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">
-                    {p.category}
-                  </p>
-                ) : null}
-                <p className="text-sm font-semibold leading-tight line-clamp-2">{p.name}</p>
-                <p className="text-xs text-gray-500">{p.eta_text ?? "até 1h"}</p>
-              </div>
-            </Link>
-          ))}
+          {items.map((p) => {
+            const url = firstImage(p.photo_url);
+            return (
+              <Link
+                key={p.id}
+                href={`/product/${p.id}`}
+                className="rounded-2xl bg-white shadow-md overflow-hidden hover:shadow-lg transition border border-gray-100"
+              >
+                <div className="relative">
+                  <span
+                    className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow border"
+                    style={{ backgroundColor: "#8B5E3C", borderColor: "#6F4A2D" }}
+                  >
+                    {formatBRL(p.price_tag)}
+                  </span>
+                  <div className="relative w-full h-44">
+                    {url ? (
+                      <Image
+                        src={url}
+                        alt={p.name}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 50vw, 400px"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-100" />
+                    )}
+                  </div>
+                </div>
+                <div className="p-3">
+                  {p.category ? (
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">
+                      {p.category}
+                    </p>
+                  ) : null}
+                  <p className="text-sm font-semibold leading-tight line-clamp-2">{p.name}</p>
+                  <p className="text-xs text-gray-500">{p.eta_text ?? "até 1h"}</p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
     );
@@ -333,8 +358,15 @@ export default function StorePage() {
       <section className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
         <Link href={b.href || "#"} className="block">
           <div className="relative">
-            <div className="w-full aspect-[3/4] overflow-hidden">{/* retrato: altura > largura */}
-              <img src={b.image} alt={b.title || "Banner"} className="w-full h-full object-cover" />
+            <div className="relative w-full aspect-[3/4] overflow-hidden">
+              <Image
+                src={b.image}
+                alt={b.title || "Banner"}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 800px"
+                unoptimized
+              />
             </div>
             {(b.title || b.subtitle) && (
               <div className="absolute inset-0 p-4 flex flex-col justify-end bg-gradient-to-t from-black/40 to-transparent">
@@ -414,7 +446,7 @@ export default function StorePage() {
       {/* filtros globais ativos (chips) */}
       {!loading && products.length > 0 && (
         <div className="mt-4 space-y-3">
-          {(anyFilterActive) && (
+          {anyFilterActive && (
             <div className="flex flex-wrap gap-2">
               {[...selectedCategories].map((c) => (
                 <span key={`c-${c}`} className="px-3 h-9 rounded-full border text-sm capitalize bg-black text-white border-black">{c}</span>
