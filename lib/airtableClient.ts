@@ -21,6 +21,19 @@ const apiBaseUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(
   tableName
 )}`;
 
+// Tipos auxiliares
+export type AirtableFields = Record<string, unknown>;
+
+export type AirtableRecord = {
+  id: string;
+  fields: AirtableFields;
+  createdTime: string;
+};
+
+export type AirtableCreateResponse = {
+  records: Array<{ id: string; fields: AirtableFields }>;
+};
+
 // Validação simples das variáveis de ambiente
 function assertEnv() {
   if (!apiKey)
@@ -38,7 +51,9 @@ function assertEnv() {
 }
 
 // ---------- Criar pedido ----------
-export async function createOrder(fields: Record<string, any>) {
+export async function createOrder(
+  fields: AirtableFields
+): Promise<AirtableCreateResponse> {
   assertEnv();
 
   const res = await fetch(apiBaseUrl, {
@@ -53,20 +68,18 @@ export async function createOrder(fields: Record<string, any>) {
     }),
   });
 
-  const data = await res.json().catch(() => ({}));
+  const data: unknown = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     // Erro detalhado (401/403 normalmente é token/base/tabela inválidos)
     throw new Error(`Airtable ${res.status}: ${JSON.stringify(data)}`);
   }
 
-  return data as {
-    records: Array<{ id: string; fields: Record<string, any> }>;
-  };
+  return data as AirtableCreateResponse;
 }
 
 // ---------- Listar pedidos por e-mail ----------
-export async function listOrders(userEmail: string) {
+export async function listOrders(userEmail: string): Promise<AirtableRecord[]> {
   assertEnv();
 
   const formula = `LOWER({User Email})='${userEmail.toLowerCase()}'`;
@@ -78,15 +91,12 @@ export async function listOrders(userEmail: string) {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
 
-  const data = await res.json().catch(() => ({}));
+  const data: unknown = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     throw new Error(`Airtable ${res.status}: ${JSON.stringify(data)}`);
   }
 
-  return (data.records || []) as Array<{
-    id: string;
-    fields: Record<string, any>;
-    createdTime: string;
-  }>;
+  const records = (data as { records?: AirtableRecord[] }).records ?? [];
+  return records;
 }
