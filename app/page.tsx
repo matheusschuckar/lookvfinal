@@ -65,7 +65,8 @@ async function fetchNearestStoreIdsForUser(userId: string): Promise<number[]> {
     console.warn("[nearest] rpc error:", error.message);
     return [];
   }
-  return (data ?? []).map((r: any) => r.store_id as number);
+  type NearestRow = { store_id: number };
+  return ((data ?? []) as NearestRow[]).map((r) => Number(r.store_id));
 }
 
 export default function Home() {
@@ -365,7 +366,7 @@ export default function Home() {
         alsoV1?: Record<string, number>
       ) => {
         const k = (key || "").toLowerCase();
-        const v2 = (nm.map as any)[k];
+        const v2 = (nm.map as Record<string, number | KeyStat>)[k];
         const raw = typeof v2 === "number" ? v2 : v2?.w ?? 0;
         const legacy = alsoV1 ? alsoV1[k] || 0 : 0;
         const v = Math.max(raw, legacy);
