@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 
 type AirtableRecord = {
   id: string;
-  fields: Record<string, any>;
+  fields: Record<string, unknown>;
   createdTime?: string;
 };
 
@@ -14,8 +14,7 @@ type RouteParams = { id: string };
 
 export default function OrderDetailPage() {
   const { id } = useParams<RouteParams>();
-  const recordId =
-    typeof id === "string" ? id : Array.isArray(id) ? id[0] : "";
+  const recordId = typeof id === "string" ? id : Array.isArray(id) ? id[0] : "";
 
   const [order, setOrder] = useState<AirtableRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,8 +56,8 @@ export default function OrderDetailPage() {
       const data = (await res.json()) as AirtableRecord;
       setOrder(data);
       setErr(null);
-    } catch (e: any) {
-      setErr(e.message ?? "Erro ao carregar pedido");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Erro ao carregar pedido");
     }
   }
 
@@ -72,8 +71,8 @@ export default function OrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId]);
 
-  const f = order?.fields || {};
-  const status = f["Status"] ?? "—";
+  const f: Record<string, unknown> = order?.fields ?? {};
+  const status = String(f["Status"] ?? "—");
   const isPaid = String(status).trim().toLowerCase() === "pago";
 
   const total = typeof f["Total"] === "number" ? f["Total"] : null;
@@ -81,12 +80,20 @@ export default function OrderDetailPage() {
     typeof f["Delivery Fee"] === "number" ? f["Delivery Fee"] : null;
   const itemPrice =
     typeof f["Item Price"] === "number" ? f["Item Price"] : null;
-  const created =
-    f["Created At"] || order?.createdTime
-      ? new Date(
-          f["Created At"] || (order?.createdTime as string)
-        ).toLocaleString("pt-BR")
-      : "—";
+  const created = (() => {
+    if (
+      typeof f["Created At"] === "string" ||
+      typeof f["Created At"] === "number"
+    ) {
+      return new Date(f["Created At"] as string | number).toLocaleString(
+        "pt-BR"
+      );
+    }
+    if (typeof order?.createdTime === "string") {
+      return new Date(order.createdTime).toLocaleString("pt-BR");
+    }
+    return "—";
+  })();
   const pixCode = f["PIX Code"] as string | undefined;
 
   const itemsFromNotes: string[] =
