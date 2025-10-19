@@ -6,21 +6,6 @@ import { supabase } from "@/lib/supabaseClient";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 
-type Profile = {
-  id: string;
-  name: string | null;
-  whatsapp: string | null;
-  street: string | null;
-  number: string | null;
-  complement: string | null;
-  bairro?: string | null;
-  city: string | null;
-  state?: string | null;
-  cep: string | null;
-  cpf: string | null;
-  status?: "waitlist" | "approved";
-};
-
 /* Utils */
 function onlyDigits(v: string) {
   return (v || "").replace(/\D/g, "");
@@ -70,7 +55,9 @@ async function fetchCities(uf: string) {
     );
     if (!res.ok) return [];
     const data = await res.json();
-    return data.map((c: any) => c.nome) as string[];
+    type IbgeCity = { nome: string };
+    const arr = Array.isArray(data) ? (data as IbgeCity[]) : [];
+    return arr.map((c) => c.nome);
   } catch {
     return [];
   }
@@ -160,8 +147,12 @@ function ProfilePageInner() {
           setCep(p.cep ?? "");
           setCpf(p.cpf ?? "");
         }
-      } catch (e: any) {
-        setErr(e?.message ?? "Não foi possível carregar seu perfil");
+      } catch (e: unknown) {
+        setErr(
+          e instanceof Error
+            ? e.message
+            : "Não foi possível carregar seu perfil"
+        );
       } finally {
         setLoading(false);
       }
@@ -248,8 +239,10 @@ function ProfilePageInner() {
 
       setOk("Perfil salvo com sucesso.");
       setTimeout(() => router.replace(next), 350);
-    } catch (e: any) {
-      setErr(e?.message ?? "Não foi possível salvar seu perfil");
+    } catch (e: unknown) {
+      setErr(
+        e instanceof Error ? e.message : "Não foi possível salvar seu perfil"
+      );
     } finally {
       setSaving(false);
     }
