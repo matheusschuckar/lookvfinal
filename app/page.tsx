@@ -12,7 +12,6 @@ import { BannersCarousel, type Banner } from "../components/BannersCarousel";
 import {
   EditorialTallBanner,
   SelectionHeroBanner,
-  BannersTriplet,
 } from "../components/HomeBanners";
 import HeaderBar from "../components/HeaderBar";
 import AppDrawer from "../components/AppDrawer";
@@ -172,7 +171,8 @@ export default function Home() {
               )
               .eq("id", u.user.id)
               .single();
-            if (profResp.data) (profResp.data as any).state = null;
+            if (profResp.data)
+              (profResp.data as { state?: string | null }).state = null;
           }
           if (profResp.error) throw profResp.error;
 
@@ -182,8 +182,8 @@ export default function Home() {
           const nearestIds = await fetchNearestStoreIdsForUser(u.user.id);
           setNearestStoreIds(nearestIds.length ? nearestIds : null);
         }
-      } catch (e: any) {
-        const msg = String(e?.message || "");
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "";
         console.error("[Home] load error:", msg);
         setErr(msg || "Erro inesperado");
       } finally {
@@ -234,7 +234,13 @@ export default function Home() {
     const afterFilters = infiniteItems
       .filter((p) => {
         if (nearestStoreIds && nearestStoreIds.length > 0) {
-          const sid = Number((p as any).store_id ?? (p as any).storeId ?? 0);
+          const sid = Number(
+            (p as unknown as { store_id?: number; storeId?: number })
+              .store_id ??
+              (p as unknown as { store_id?: number; storeId?: number })
+                .storeId ??
+              0
+          );
           if (!nearestStoreIds.includes(sid)) return false;
         }
         return true;
@@ -317,8 +323,8 @@ export default function Home() {
     const p1 = getPrefs();
 
     function norm(map: Record<string, KeyStat> | Record<string, number>) {
-      const vals = Object.values(map).map((v: any) =>
-        typeof v === "number" ? v : v?.w ?? 0
+      const vals = Object.values(map).map((v) =>
+        typeof v === "number" ? v : (v as KeyStat).w ?? 0
       );
       const max = vals.length ? Math.max(1, ...vals) : 1;
       return { map, max };
@@ -327,7 +333,6 @@ export default function Home() {
     const nCat = norm(p2.cat);
     const nStore = norm(p2.store);
     const nGender = norm(p2.gender);
-    const nSize = norm(p2.size);
     const nPrice = norm(p2.price);
     const nEta = norm(p2.eta);
     const nProd = norm(p2.product);
@@ -341,11 +346,16 @@ export default function Home() {
 
     const scored = filtered.map((p) => {
       const cats = categoriesOf(p);
-      const mainCat = cats[0] || (p as any).category || "";
+      const mainCat =
+        cats[0] || (p as unknown as { category?: string }).category || "";
+      const etaDict = p as unknown as {
+        eta_text_runtime?: string | null;
+        eta_text?: string | null;
+      };
+      const etaTxt = etaDict.eta_text_runtime ?? etaDict.eta_text ?? null;
       const storeKey = (p.store_name || "").toLowerCase();
       const genderKey = (p.gender || "").toLowerCase();
       const priceKey = priceBucket(p.price_tag);
-      const etaTxt = (p as any).eta_text_runtime ?? (p as any).eta_text ?? null;
       const etaKey = etaBucket(etaTxt);
       const prodKey = String(p.id);
 
@@ -421,14 +431,6 @@ export default function Home() {
     }
   }
 
-  const idle = (cb: () => void) => {
-    const ric: any =
-      (typeof window !== "undefined" && (window as any).requestIdleCallback) ||
-      null;
-    if (ric) ric(cb, { timeout: 500 });
-    else setTimeout(cb, 0);
-  };
-
   function recordInteraction(p: Product) {
     try {
       const cats = categoriesOf(p);
@@ -437,7 +439,11 @@ export default function Home() {
       bumpStore(p.store_name || "", 1);
       if (p.gender) bumpGender(p.gender, 0.8);
       bumpPriceBucket(priceBucket(p.price_tag), 0.6);
-      const etaTxt = (p as any).eta_text_runtime ?? (p as any).eta_text ?? null;
+      const etaInfo = p as unknown as {
+        eta_text_runtime?: string | null;
+        eta_text?: string | null;
+      };
+      const etaTxt = etaInfo.eta_text_runtime ?? etaInfo.eta_text ?? null;
       bumpEtaBucket(etaBucket(etaTxt), 0.5);
       bumpProduct(p.id, 0.25);
 
@@ -670,11 +676,22 @@ export default function Home() {
               const list = filteredRanked;
               let i = 0;
 
+              type RequestIdleCallback = (
+                cb: (deadline: {
+                  didTimeout: boolean;
+                  timeRemaining: () => number;
+                }) => void,
+                opts?: { timeout: number }
+              ) => number;
+
               const idleLocal = (cb: () => void) => {
-                const ric: any =
-                  (typeof window !== "undefined" &&
-                    (window as any).requestIdleCallback) ||
-                  null;
+                const w =
+                  typeof window !== "undefined"
+                    ? (window as Window & {
+                        requestIdleCallback?: RequestIdleCallback;
+                      })
+                    : undefined;
+                const ric = w?.requestIdleCallback ?? null;
                 if (ric) ric(cb, { timeout: 500 });
                 else setTimeout(cb, 0);
               };
