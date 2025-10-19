@@ -4,6 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Product } from "@/lib/data/types";
 
+type ProductWithDedupe = Product & {
+  store_count?: number | null;
+  stores?: string[] | null;
+};
+
 export default function ProductCard({
   p,
   onTap,
@@ -23,10 +28,9 @@ export default function ProductCard({
       : String(p.price_tag ?? "");
 
   // extras vindos do dedupe (opcionais)
-  const storeCount = Number((p as any).store_count ?? 1);
-  const storesList = Array.isArray((p as any).stores)
-    ? ((p as any).stores as string[])
-    : [];
+  const pd = p as ProductWithDedupe;
+  const storeCount = typeof pd.store_count === "number" ? pd.store_count : 1;
+  const storesList = Array.isArray(pd.stores) ? pd.stores : [];
   const extraStoresLabel = storeCount > 1 ? ` · +${storeCount - 1} lojas` : "";
 
   const handleClick = () => {
