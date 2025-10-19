@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
 import {
   bumpGender,
   bumpSize,
-  bumpCategory,
 } from "@/lib/prefs";
 
 type Gender = "female" | "male";
 type Size = "PP" | "P" | "M" | "G" | "GG";
+type TabType = "genero" | "tamanho" | "categorias";
 
 function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
   const next = new Set(set);
@@ -35,8 +34,8 @@ export default function FiltersModal({
   open: boolean;
   onClose: () => void;
 
-  activeTab: "genero" | "tamanho" | "categorias";
-  setActiveTab: (t: "genero" | "tamanho" | "categorias") => void;
+  activeTab: TabType;
+  setActiveTab: (t: TabType) => void;
 
   allCategories: string[];
 
@@ -52,9 +51,16 @@ export default function FiltersModal({
   clearAll: () => void;
   onApply: () => void;
 }) {
+  // sem hooks condicionais
+  const onBackdrop = () => onClose();
+
   if (!open) return null;
 
-  const onBackdrop = useCallback(() => onClose(), [onClose]);
+  const tabs: { id: TabType; label: string }[] = [
+    { id: "genero", label: "Gênero" },
+    { id: "tamanho", label: "Tamanho" },
+    { id: "categorias", label: "Categorias" },
+  ];
 
   return (
     <div className="fixed inset-0 z-[70]">
@@ -81,18 +87,14 @@ export default function FiltersModal({
           {/* tabs */}
           <div className="px-5">
             <div className="flex gap-6 text-sm" role="tablist" aria-label="Filtros">
-              {[
-                { id: "genero", label: "Gênero" },
-                { id: "tamanho", label: "Tamanho" },
-                { id: "categorias", label: "Categorias" },
-              ].map((t) => (
+              {tabs.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setActiveTab(t.id as any)}
+                  onClick={() => setActiveTab(t.id)}
                   role="tab"
-                  aria-selected={activeTab === (t.id as any)}
+                  aria-selected={activeTab === t.id}
                   className={`pb-3 -mb-px ${
-                    activeTab === (t.id as any)
+                    activeTab === t.id
                       ? "text-[#141414] border-b-2 border-[#141414]"
                       : "text-gray-500"
                   }`}
