@@ -11,13 +11,8 @@ type Product = {
   name: string;
   store_name: string;
   photo_url: string[] | string | null;
-
-  // novo (da VIEW)
-  eta_text_runtime?: string | null;
-
-  // legado (da tabela antiga)
-  eta_text?: string | null;
-
+  eta_text_runtime?: string | null; // da VIEW
+  eta_text?: string | null;         // legado
   price_tag: number;
   sizes: string[] | null;
 };
@@ -29,12 +24,16 @@ type CommentView = {
   displayName: string;
 };
 
-function formatBRL(v: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(v);
+/* BRL "alpha": BRL 1.689 (com separador de milhar) e sem ",00" quando inteiro */
+function formatBRLAlpha(v: number) {
+  const hasCents = Math.round(v * 100) % 100 !== 0;
+  const formatted = v.toLocaleString("pt-BR", {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  });
+  return `BRL ${formatted}`;
 }
+
 function formatDisplayName(name?: string | null) {
   if (!name) return "Cliente";
   const parts = name.trim().split(/\s+/);
@@ -52,16 +51,19 @@ export default function ProductPage() {
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // --- auth id (para like/comentário) ---
+  // fullscreen da imagem
+  const [showFull, setShowFull] = useState(false);
+
+  // auth id (para like/comentário)
   const [userId, setUserId] = useState<string | null>(null);
 
-  // --- likes ---
+  // likes
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
 
-  // --- comentários ---
+  // comentários
   const [comments, setComments] = useState<CommentView[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
@@ -119,8 +121,8 @@ export default function ProductPage() {
           .eq("id", pid)
           .maybeSingle();
 
-        // Se a view não existir ou não achar o produto, usa fallback
         if (view.error || !view.data) {
+          // fallback
           const { data, error } = await supabase
             .from("products")
             .select("id,name,store_name,photo_url,eta_text,price_tag,sizes")
@@ -139,15 +141,11 @@ export default function ProductPage() {
     })();
   }, [id]);
 
-  // 🔥 CONTADOR GLOBAL DE VIEWS: incrementa via RPC ao abrir a página
+  // contador global de views
   useEffect(() => {
     if (!product?.id || viewedRef.current) return;
     viewedRef.current = true;
-
-    // métrica local (se você ainda quiser manter histórico local)
     bumpView(product.id);
-
-    // incrementa no Postgres via RPC (com try/catch tipado)
     (async () => {
       try {
         const { error } = await supabase.rpc("increment_product_view", {
@@ -186,7 +184,7 @@ export default function ProductPage() {
     })();
   }, [id, userId]);
 
-  // comentários: listar
+  // comentários
   useEffect(() => {
     if (!product?.id) return;
     (async () => {
@@ -199,11 +197,11 @@ export default function ProductPage() {
           .order("created_at", { ascending: false });
 
         if (error) throw error;
+
         type CommentRow = {
           id: string;
           content: string;
           created_at: string;
-          // pode vir como objeto único OU como array de objetos
           user_profiles?:
             | { name?: string | null }
             | Array<{ name?: string | null }>
@@ -212,16 +210,15 @@ export default function ProductPage() {
 
         const list: CommentView[] = (data ?? []).map((row: CommentRow) => {
           const up = row.user_profiles;
-          const name =
-            Array.isArray(up) ? up[0]?.name ?? null : up?.name ?? null;
-        
+          const name = Array.isArray(up) ? up[0]?.name ?? null : up?.name ?? null;
+
           return {
             id: row.id,
             content: row.content,
             created_at: row.created_at,
             displayName: formatDisplayName(name),
           };
-        });        
+        });
 
         setComments(list);
       } catch {
@@ -269,13 +266,10 @@ export default function ProductPage() {
 
     try {
       if (!liked) {
-        // otimista
         setLiked(true);
         setLikeCount((c) => c + 1);
         setLikePulse(true);
         setTimeout(() => setLikePulse(false), 220);
-
-        // insere; se já existir (23505), ignoramos
         const { error } = await supabase
           .from("product_likes")
           .insert({ product_id: pid, user_id: userId });
@@ -285,7 +279,6 @@ export default function ProductPage() {
           throw error;
         }
       } else {
-        // otimista
         setLiked(false);
         setLikeCount((c) => Math.max(0, c - 1));
         const { error } = await supabase
@@ -306,57 +299,6 @@ export default function ProductPage() {
     }
   }
 
-  async function handlePostComment() {
-    const text = newComment.trim();
-    if (!text) return;
-
-    try {
-      setPosting(true);
-      const { data: u } = await supabase.auth.getUser();
-      const user = u?.user;
-      if (!user) {
-        router.push("/auth");
-        return;
-      }
-
-      let displayName = "Cliente";
-      const { data: prof } = await supabase
-        .from("user_profiles")
-        .select("name")
-        .eq("id", user.id)
-        .maybeSingle();
-      displayName = formatDisplayName(prof?.name);
-
-      const { data: inserted, error } = await supabase
-        .from("product_comments")
-        .insert({
-          product_id: product!.id,
-          user_id: user.id,
-          content: text,
-        })
-        .select("id,content,created_at")
-        .single();
-      if (error) throw error;
-
-      setComments((prev) => [
-        {
-          id: inserted!.id,
-          content: inserted!.content,
-          created_at: inserted!.created_at,
-          displayName,
-        },
-        ...prev,
-      ]);
-      setNewComment("");
-    } catch (e: unknown) {
-      showToast(
-        e instanceof Error ? e.message : "Não foi possível enviar o comentário"
-      );
-    } finally {
-      setPosting(false);
-    }
-  }
-
   if (loading) {
     return (
       <main className="max-w-md mx-auto">
@@ -374,7 +316,7 @@ export default function ProductPage() {
   if (err) return <main className="p-4 text-red-600">{err}</main>;
   if (!product) return <main className="p-4">Produto não encontrado.</main>;
 
-  const price = formatBRL(product.price_tag);
+  const priceAlpha = formatBRLAlpha(product.price_tag);
 
   // normaliza para array
   const images: string[] = Array.isArray(product.photo_url)
@@ -383,31 +325,24 @@ export default function ProductPage() {
     ? [product.photo_url]
     : [];
 
+  const etaText = product.eta_text_runtime ?? product.eta_text ?? "até 1 hora";
+
   return (
     <main className="bg-white text-black max-w-md mx-auto min-h-[100dvh]">
-      {/* Imagem principal (carrossel) */}
+      {/* Imagem principal — 4:5, sem bordas laterais, preenchendo os cantos */}
       <div className="relative">
+        {/* back */}
         <button
           onClick={() => router.back()}
           aria-label="Voltar"
-          className="absolute left-3 top-3 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur border border-white/60 active:scale-95"
+          className="absolute left-3 top-3 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/85 backdrop-blur border border-white/60 active:scale-95"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            fill="none"
-          >
-            <path
-              d="M15 18l-6-6 6-6"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+            <path d="M15 18l-6-6 6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
 
+        {/* share */}
         <button
           onClick={() => {
             if (navigator.share) {
@@ -424,29 +359,19 @@ export default function ProductPage() {
             }
           }}
           aria-label="Compartilhar"
-          className="absolute right-3 top-3 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur border border-white/60 active:scale-95"
+          className="absolute right-3 top-3 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/85 backdrop-blur border border-white/60 active:scale-95"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            fill="none"
-          >
-            <path
-              d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
 
-        {/* slides */}
+        {/* Slide area: 4/5, sem “retângulo” lateral. Toque abre fullscreen */}
         <div
-          className="relative w-full h-[70vh] overflow-hidden bg-gray-100"
+          className="relative w-full aspect-[4/5] overflow-hidden"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
+          onClick={() => setShowFull(true)}
         >
           {images.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
@@ -464,94 +389,50 @@ export default function ProductPage() {
               />
             ))
           )}
-        </div>
 
-        {/* controles */}
-        {images.length > 1 && (
-          <>
-            <button
-              aria-label="Anterior"
-              onClick={() => go(-1)}
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur border border-white/60 active:scale-95"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                fill="none"
-              >
-                <path
-                  d="M15 18l-6-6 6-6"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <button
-              aria-label="Próximo"
-              onClick={() => go(+1)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-9 w-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur border border-white/60 active:scale-95"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                fill="none"
-              >
-                <path
-                  d="M9 18l6-6-6-6"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5">
-              {images.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    i === idx ? "bg-white" : "bg-white/50"
+          {/* badge de preço (sobre a imagem) */}
+          <span className="absolute left-4 bottom-4 z-20 inline-flex items-center rounded-full bg-white/90 backdrop-blur px-3 h-8 text-[12px] font-bold tracking-wide shadow border border-white/70">
+            {priceAlpha}
+          </span>
+
+          {/* like + contador */}
+          <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2">
+            {userId ? (
+              <>
+                <button
+                  aria-label={liked ? "Remover like" : "Dar like"}
+                  disabled={likeBusy}
+                  onClick={toggleLike}
+                  className={`h-11 w-11 rounded-full border border-white/60 bg-white/80 backdrop-blur flex items-center justify-center active:scale-95 transition ${
+                    likePulse ? "scale-110" : "scale-100"
                   }`}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* like + contador (mantido) */}
-        <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2">
-          {userId ? (
-            <>
-              <button
-                aria-label={liked ? "Remover like" : "Dar like"}
-                disabled={likeBusy}
-                onClick={toggleLike}
-                className={`h-11 w-11 rounded-full border border-white/60 bg-white/80 backdrop-blur flex items-center justify-center active:scale-95 transition ${
-                  likePulse ? "scale-110" : "scale-100"
-                }`}
-              >
-                {liked ? (
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="#e11d48"
-                    stroke="none"
-                  >
-                    <path d="M12 21s-7.5-4.35-9.5-8.4C1.3 9.6 2.7 6 6.4 6c2 0 3.1 1 3.6 1.7.5-.7 1.6-1.7 3.6-1.7 3.7 0 5.1 3.6 3.9 6.6C19.5 16.65 12 21 12 21z" />
-                  </svg>
-                ) : (
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                  >
+                >
+                  {liked ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#e11d48" stroke="none">
+                      <path d="M12 21s-7.5-4.35-9.5-8.4C1.3 9.6 2.7 6 6.4 6c2 0 3.1 1 3.6 1.7.5-.7 1.6-1.7 3.6-1.7 3.7 0 5.1 3.6 3.9 6.6C19.5 16.65 12 21 12 21z" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path
+                        d="M20.8 12.6C18.8 16.65 12 21 12 21s-6.8-4.35-8.8-8.4C2 9.6 3.4 6 7.1 6c2 0 3.1 1 3.6 1.7.5-.7 1.6-1.7 3.6-1.7 3.7 0 5.1 3.6 3.9 6.6Z"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+                <span className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60">
+                  {likeCount}
+                </span>
+              </>
+            ) : (
+              <>
+                <div
+                  aria-label="Likes"
+                  className="h-11 w-11 rounded-full border border-white/60 bg-white/60 backdrop-blur flex items-center justify-center opacity-80"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path
                       d="M20.8 12.6C18.8 16.65 12 21 12 21s-6.8-4.35-8.8-8.4C2 9.6 3.4 6 7.1 6c2 0 3.1 1 3.6 1.7.5-.7 1.6-1.7 3.6-1.7 3.7 0 5.1 3.6 3.9 6.6Z"
                       strokeWidth="2"
@@ -559,59 +440,57 @@ export default function ProductPage() {
                       strokeLinejoin="round"
                     />
                   </svg>
-                )}
-              </button>
-              <span className="px-2 py-1 rounded-full bg-white/80 backdrop-blur text-xs font-medium border border-white/60">
-                {likeCount}
-              </span>
-            </>
-          ) : (
-            <>
-              <div
-                aria-label="Likes"
-                className="h-11 w-11 rounded-full border border-white/60 bg-white/60 backdrop-blur flex items-center justify-center opacity-80"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path
-                    d="M20.8 12.6C18.8 16.65 12 21 12 21s-6.8-4.35-8.8-8.4C2 9.6 3.4 6 7.1 6c2 0 3.1 1 3.6 1.7.5-.7 1.6-1.7 3.6-1.7 3.7 0 5.1 3.6 3.9 6.6Z"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <span className="px-2 py-1 rounded-full bg-white/80 backdrop-blur text-xs font-medium border border-white/60">
-                {likeCount}
-              </span>
-            </>
+                </div>
+                <span className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60">
+                  {likeCount}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* dots */}
+          {images.length > 1 && (
+            <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5">
+              {images.map((_, i) => (
+                <span key={i} className={`h-1.5 w-1.5 rounded-full ${i === idx ? "bg-white" : "bg-white/50"}`} />
+              ))}
+            </div>
           )}
         </div>
+
+        {/* Fullscreen overlay da imagem (tap para abrir/fechar) */}
+        {showFull && (
+          <div
+            className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center"
+            onClick={() => setShowFull(false)}
+          >
+            <img
+              src={images[0]}
+              alt={product.name}
+              className="max-h-[90vh] max-w-[90vw] object-contain"
+            />
+          </div>
+        )}
       </div>
 
       {/* Conteúdo */}
       <section className="px-4 py-4 pb-[120px]">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-[22px] leading-6 font-semibold tracking-tight">
-            {product.name}
-          </h1>
-          <div className="text-right">
-            <div className="text-[20px] leading-6 font-bold">{price}</div>
-
-            <div className="text-[11px] text-gray-500">
-              {product.eta_text_runtime ?? product.eta_text ?? "até 1h"}
-            </div>
-          </div>
+        {/* loja — mesmo estilo dos cards da home */}
+        <div className="mt-1">
+          <span className="inline-flex items-center px-3 py-2 rounded-xl border text-[11px] font-semibold tracking-wide uppercase bg-[#EEE8E1] border-[#E6DED3] text-gray-900">
+            {product.store_name}
+          </span>
         </div>
 
+        {/* título (sem preço ao lado) */}
+        <h1 className="mt-3 text-[22px] leading-6 font-semibold tracking-tight">
+          {product.name}
+        </h1>
+
+        {/* ETA em chip suave */}
         <div className="mt-2">
-          <span className="flex items-center w-full justify-start px-4 h-10 rounded-full border text-sm font-medium normal-case bg-[#141414] text-white border-[#141414]">
-            {product.store_name}
+          <span className="inline-flex items-center h-8 px-3 rounded-full text-[12px] bg-neutral-100 text-neutral-700 border border-neutral-200">
+            {product.eta_text_runtime ?? product.eta_text ?? "até 1 hora"}
           </span>
         </div>
 
@@ -663,24 +542,17 @@ export default function ProductPage() {
                 <div className="animate-pulse h-14 rounded-xl bg-gray-100" />
               </>
             ) : comments.length === 0 ? (
-              <p className="text-xs text-gray-500">
-                Seja o primeiro a comentar.
-              </p>
+              <p className="text-xs text-gray-500">Seja o primeiro a comentar.</p>
             ) : (
               comments.map((c) => (
-                <div
-                  key={c.id}
-                  className="rounded-xl border border-gray-200 bg-white p-3"
-                >
+                <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{c.displayName}</div>
                     <div className="text-[11px] text-gray-500">
                       {new Date(c.created_at).toLocaleDateString("pt-BR")}
                     </div>
                   </div>
-                  <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">
-                    {c.content}
-                  </p>
+                  <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">{c.content}</p>
                 </div>
               ))
             )}
@@ -692,7 +564,53 @@ export default function ProductPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!newComment.trim()) return;
-                handlePostComment();
+                (async () => {
+                  try {
+                    setPosting(true);
+                    const { data: u } = await supabase.auth.getUser();
+                    const user = u?.user;
+                    if (!user) {
+                      router.push("/auth");
+                      return;
+                    }
+
+                    let displayName = "Cliente";
+                    const { data: prof } = await supabase
+                      .from("user_profiles")
+                      .select("name")
+                      .eq("id", user.id)
+                      .maybeSingle();
+                    displayName = formatDisplayName(prof?.name);
+
+                    const { data: inserted, error } = await supabase
+                      .from("product_comments")
+                      .insert({
+                        product_id: product!.id,
+                        user_id: user.id,
+                        content: newComment.trim(),
+                      })
+                      .select("id,content,created_at")
+                      .single();
+                    if (error) throw error;
+
+                    setComments((prev) => [
+                      {
+                        id: inserted!.id,
+                        content: inserted!.content,
+                        created_at: inserted!.created_at,
+                        displayName,
+                      },
+                      ...prev,
+                    ]);
+                    setNewComment("");
+                  } catch (e: unknown) {
+                    showToast(
+                      e instanceof Error ? e.message : "Não foi possível enviar o comentário"
+                    );
+                  } finally {
+                    setPosting(false);
+                  }
+                })();
               }}
               className="mt-4"
             >
@@ -704,7 +622,7 @@ export default function ProductPage() {
                 rows={3}
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Escreva um comentário (seja gentil ✨)"
+                placeholder="Escreva um comentário sobre o produto!"
                 className="w-full rounded-xl border border-gray-300 bg-white p-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10"
               />
               <div className="mt-2 flex items-center justify-between">
@@ -728,26 +646,22 @@ export default function ProductPage() {
         </div>
       </section>
 
-      {/* CTA fixo no rodapé com área segura */}
-      <div className="fixed inset-x-0 bottom-0 z-[120] bg-white border-t">
+      {/* CTA fixo no rodapé com área segura — sem subtotal */}
+      <div className="fixed inset-x-0 bottom-0 z-[120] bg-[#fdfcfb] border-t border-neutral-200">
         <div className="mx-auto max-w-md px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Subtotal</span>
-            <span className="text-base font-semibold">{price}</span>
-          </div>
           <button
             onClick={handleAddToBag}
             disabled={!size}
-            className={`w-full h-12 rounded-xl text-white text-sm font-semibold active:scale-[0.99] transition ${
-              size ? "bg-[#141414]" : "bg-gray-300 cursor-not-allowed"
+            className={`w-full h-12 rounded-xl text-sm font-semibold active:scale-[0.99] transition ${
+              size ? "bg-[#141414] text-white" : "bg-neutral-200 text-neutral-500 cursor-not-allowed"
             }`}
           >
-            Adicionar à sacola
+            {size ? "Adicionar à sacola" : "Selecione um tamanho"}
           </button>
         </div>
       </div>
 
-      {/* Toast mínimo */}
+      {/* Toast */}
       {toast && (
         <div
           role="status"
