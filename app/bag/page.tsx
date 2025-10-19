@@ -10,7 +10,6 @@ import {
   removeFromBag,
   bagTotals,
   BagItem,
-  clearBag,
 } from "@/lib/bag";
 import { createOrder } from "@/lib/airtableClient";
 import BottomNav from "@/components/BottomNav";
@@ -153,7 +152,7 @@ function normalize(s: string) {
     .toLowerCase();
 }
 
-function isServiceable(uf: string, city: string, _cep?: string) {
+function isServiceable(uf: string, city: string) {
   const nUF = (uf || "").toUpperCase();
   const nCity = normalize(city || "");
   return SERVICEABLE.some((c) => c.uf === nUF && normalize(c.city) === nCity);
@@ -192,7 +191,7 @@ function BagPageInner() {
   const [pixCode, setPixCode] = useState<string | null>(null);
 
   // pode pagar? depende de endereço atendido e não estar processando
-  const canCheckout = isServiceable(stateUf, city, cep) && creatingFor === null;
+  const canCheckout = isServiceable(stateUf, city) && creatingFor === null;
 
   // carrega itens da sacola
   useEffect(() => {
@@ -214,9 +213,6 @@ function BagPageInner() {
           )
           .eq("id", user.id)
           .single();
-
-        // tipa o resultado para usar abaixo
-        const row = (p ?? null) as ProfileRow | null;
 
         if (error) throw error;
 
@@ -365,7 +361,7 @@ function BagPageInner() {
       }
 
       // <<< BLOQUEIO POR REGIÃO
-      if (!isServiceable(stateUf, city, cep)) {
+      if (!isServiceable(stateUf, city)) {
         setErr(serviceabilityMsg(stateUf, city));
         setStep("confirm");
         return;
@@ -683,7 +679,7 @@ function BagPageInner() {
           <h2 className="text-lg font-semibold mb-2">Confirme seu endereço</h2>
 
           {/* Aviso de área não atendida */}
-          {!isServiceable(stateUf, city, cep) && (
+          {!isServiceable(stateUf, city) && (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900">
               {serviceabilityMsg(stateUf, city)}
               <div className="mt-2 text-[12px] text-amber-800">
