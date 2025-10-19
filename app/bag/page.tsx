@@ -100,6 +100,21 @@ type Profile = {
   cpf?: string | null;
 };
 
+// Row retornada pelo Supabase (evita uso de `any`)
+type ProfileRow = {
+  id: string;
+  name: string | null;
+  whatsapp: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  bairro: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+  cpf: string | null;
+};
+
 // ===== helpers de validação =====
 function onlyDigits(v: string) {
   return (v || "").replace(/\D/g, "");
@@ -138,7 +153,7 @@ function normalize(s: string) {
     .toLowerCase();
 }
 
-function isServiceable(uf: string, city: string, cep?: string) {
+function isServiceable(uf: string, city: string, _cep?: string) {
   const nUF = (uf || "").toUpperCase();
   const nCity = normalize(city || "");
   return SERVICEABLE.some((c) => c.uf === nUF && normalize(c.city) === nCity);
@@ -200,21 +215,24 @@ function BagPageInner() {
           .eq("id", user.id)
           .single();
 
+        // tipa o resultado para usar abaixo
+        const row = (p ?? null) as ProfileRow | null;
+
         if (error) throw error;
 
         const prof: Profile = {
           id: user.id,
           email: user.email || null,
-          name: (p as any)?.name ?? null,
-          whatsapp: (p as any)?.whatsapp ?? null,
-          street: (p as any)?.street ?? null,
-          number: (p as any)?.number ?? null,
-          complement: (p as any)?.complement ?? null,
-          bairro: (p as any)?.bairro ?? null,
-          city: (p as any)?.city ?? null,
-          state: (p as any)?.state ?? null,
-          cep: (p as any)?.cep ?? null,
-          cpf: (p as any)?.cpf ?? null,
+          name: p?.name ?? null,
+          whatsapp: p?.whatsapp ?? null,
+          street: p?.street ?? null,
+          number: p?.number ?? null,
+          complement: p?.complement ?? null,
+          bairro: p?.bairro ?? null,
+          city: p?.city ?? null,
+          state: p?.state ?? null,
+          cep: p?.cep ?? null,
+          cpf: p?.cpf ?? null,
         };
         setProfile(prof);
 
@@ -226,8 +244,9 @@ function BagPageInner() {
         setCity(prof.city ?? "");
         setStateUf((prof.state as string) ?? "SP");
         setCep(prof.cep ?? "");
-      } catch (e: any) {
-        setErr(e.message ?? "Erro ao carregar perfil");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        setErr(message ?? "Erro ao carregar perfil");
       }
     })();
   }, []);
@@ -262,13 +281,7 @@ function BagPageInner() {
     })();
   }, [search, items.length, router]);
 
-  function handleQty(i: number, q: number) {
-    setItems(updateQty(i, Math.max(1, q)));
-  }
-
-  function handleRemove(i: number) {
-    setItems(removeFromBag(i));
-  }
+  // removidas handleQty e handleRemove pois não eram usadas
 
   const { subtotal } = bagTotals(items);
 
@@ -480,8 +493,9 @@ function BagPageInner() {
           el?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       }, 50);
-    } catch (e: any) {
-      setErr(e.message ?? "Erro ao criar pedido");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setErr(message ?? "Erro ao criar pedido");
     } finally {
       setCreatingFor(null);
     }
@@ -495,12 +509,6 @@ function BagPageInner() {
     } catch {
       setErr("Não foi possível copiar. Selecione e copie manualmente.");
     }
-  }
-
-  function finishAfterPaid() {
-    clearBag();
-    setItems([]);
-    setOkMsg("Pagamento confirmado manualmente. Obrigado!");
   }
 
   // UI (recalcula para a seção de PIX)
