@@ -3,6 +3,33 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Product } from "./types";
 
 /**
+ * Estrutura de linha esperada da view `products_with_store_eta`
+ */
+type CatalogRow = {
+  id: number;
+  name: string;
+  store_name: string;
+  photo_url: string[] | string | null;
+  price_tag: number;
+  category?: string | null;
+  gender?: string | null;
+  sizes?: string[] | string | null;
+  categories?: string[] | string | null;
+  store_id?: number | null;
+  store_slug?: string | null;
+  eta_text?: string | null;
+  eta_text_runtime?: string | null;
+  eta_display?: string | null;
+  open_time?: string | null;
+  close_time?: string | null;
+  eta_text_default?: string | null;
+  eta_text_before_open?: string | null;
+  eta_text_after_close?: string | null;
+  view_count?: number | null;
+  stores?: string[] | null;
+};
+
+/**
  * Busca o catálogo na view `products_with_store_eta`.
  * Quando `storeIds` é fornecido, filtra pelos IDs das lojas informadas
  * (usado para exibir apenas a unidade mais próxima por marca).
@@ -27,9 +54,9 @@ export async function fetchCatalog(opts?: {
     return [];
   }
 
-  const rows = Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? (data as CatalogRow[]) : [];
 
-  return rows.map((row: any) => ({
+  return rows.map((row) => ({
     id: row.id,
     name: row.name,
     store_name: row.store_name,
