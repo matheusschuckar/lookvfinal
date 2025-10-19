@@ -57,5 +57,6 @@ export type Product = {
   view_count?: number | null;
 
   // relação crua opcional (se a view incluir)
-  stores?: any;
+  // quando presente no frontend, usamos normalmente como lista de nomes de lojas
+  stores?: string[] | null;
 };
