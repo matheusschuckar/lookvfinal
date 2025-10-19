@@ -99,21 +99,6 @@ type Profile = {
   cpf?: string | null;
 };
 
-// Row retornada pelo Supabase (evita uso de `any`)
-type ProfileRow = {
-  id: string;
-  name: string | null;
-  whatsapp: string | null;
-  street: string | null;
-  number: string | null;
-  complement: string | null;
-  bairro: string | null;
-  city: string | null;
-  state: string | null;
-  cep: string | null;
-  cpf: string | null;
-};
-
 // ===== helpers de validação =====
 function onlyDigits(v: string) {
   return (v || "").replace(/\D/g, "");
