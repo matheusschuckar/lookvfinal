@@ -9,18 +9,28 @@ function norm(s: string) {
     .toLowerCase();
 }
 
-function productKey(p: Product) {
+type ProductExtended = Product & {
+  master_sku?: string | null;
+  global_sku?: string | null;
+  external_sku?: string | null;
+  brand?: string | null;
+  color?: string | null;
+  size?: string | null;
+  price_tag?: number | null;
+  distance_km?: number | null;
+};
+
+function productKey(p: ProductExtended): string {
   // Prioridades de chave únicas reais se existirem
-  const k1 =
-    (p as any).master_sku || (p as any).global_sku || (p as any).external_sku;
+  const k1 = p.master_sku || p.global_sku || p.external_sku;
   if (k1) return String(k1).trim();
 
   // Fallback estável
   return [
-    norm((p as any).brand || ""),
+    norm(p.brand || ""),
     norm(p.name || ""),
-    norm((p as any).color || ""),
-    norm((p as any).size || ""),
+    norm(p.color || ""),
+    norm(p.size || ""),
   ].join("|");
 }
 
@@ -32,7 +42,8 @@ export function dedupeProducts(
 ): Chosen[] {
   const byKey = new Map<string, Chosen>();
 
-  for (const p of products) {
+  for (const prod of products) {
+    const p = prod as ProductExtended;
     const key = productKey(p);
     const existing = byKey.get(key);
 
@@ -49,8 +60,8 @@ export function dedupeProducts(
     const preferCheapest = opts?.preferCheapest ?? true;
 
     if (preferCheapest) {
-      const priceA = Number((existing as any).price_tag) || 0;
-      const priceB = Number((p as any).price_tag) || 0;
+      const priceA = Number(existing.price_tag) || 0;
+      const priceB = Number(p.price_tag) || 0;
       if (priceB < priceA) {
         // troca o card exibido pelo mais barato
         byKey.set(key, {
@@ -60,8 +71,9 @@ export function dedupeProducts(
         });
       }
     }
-    // opcional: aqui você poderia preferir a loja mais próxima se já tiver distância calculada
-    // if ((p as any).distance_km < (existing as any).distance_km) ...
+
+    // opcional: poderia comparar distance_km se desejado
+    // if ((p.distance_km ?? Infinity) < (existing.distance_km ?? Infinity)) ...
   }
 
   return Array.from(byKey.values());
