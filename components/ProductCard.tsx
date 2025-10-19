@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Product } from "@/lib/data/types";
+import { formatBRLAlpha } from "@/lib/ui/helpers";
 
 type ProductWithDedupe = Product & {
   store_count?: number | null;
@@ -24,27 +25,29 @@ export default function ProductCard({
 
   const price =
     typeof p.price_tag === "number"
-      ? `R$ ${p.price_tag.toFixed(2).replace(".", ",")}`
+      ? formatBRLAlpha(p.price_tag)
       : String(p.price_tag ?? "");
 
-  // extras vindos do dedupe (opcionais)
   const pd = p as ProductWithDedupe;
   const storeCount = typeof pd.store_count === "number" ? pd.store_count : 1;
-  const storesList = Array.isArray(pd.stores) ? pd.stores : [];
   const extraStoresLabel = storeCount > 1 ? ` · +${storeCount - 1} lojas` : "";
 
-  const handleClick = () => {
-    onTap?.(p);
-  };
+  const etaTxt =
+    (p as { eta_text_runtime?: string | null }).eta_text_runtime ??
+    (p as { eta_text?: string | null }).eta_text ??
+    "até 1 hora";
+
+  const handleClick = () => onTap?.(p);
 
   return (
     <Link
       href={`/product/${p.id}`}
       prefetch={false}
       onClick={handleClick}
-      className="block group rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition"
+      className="block rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition border border-neutral-200/60"
     >
-      <div className="relative w-full aspect-[4/5] bg-gray-100">
+      {/* imagem + preço */}
+      <div className="relative w-full aspect-[4/5] bg-neutral-100">
         {photo ? (
           <Image
             src={photo}
@@ -54,31 +57,34 @@ export default function ProductCard({
             className="object-cover"
           />
         ) : (
-          <div className="absolute inset-0 bg-gray-100" />
+          <div className="absolute inset-0 bg-neutral-100" />
         )}
+
+        {/* badge de preço */}
+        <span className="absolute left-2 bottom-2 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold shadow border border-neutral-300">
+          {price}
+        </span>
       </div>
 
-      <div className="px-2 py-3">
-        <div className="text-[13px] font-medium text-gray-900 line-clamp-2">
-          {p.name}
-        </div>
-
-        <div
-          className="mt-1 text-[12px] text-gray-500 truncate"
-          title={
-            storesList.length > 1
-              ? `${p.store_name} · também em: ${storesList
-                  .filter((s) => s !== p.store_name)
-                  .join(", ")}`
-              : p.store_name
-          }
-        >
+      {/* marca */}
+      <div className="px-2 pt-2">
+        <div className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-semibold text-neutral-700 uppercase truncate">
           {p.store_name}
           {extraStoresLabel}
         </div>
+      </div>
 
-        <div className="mt-1 text-[13px] font-semibold text-gray-900">
-          {price}
+      {/* nome + espaçamento para ETA */}
+      <div className="flex flex-col px-2 pt-2 pb-3 min-h-[84px] justify-between">
+        <div className="text-[13px] font-medium text-neutral-900 leading-snug line-clamp-2">
+          {p.name}
+        </div>
+
+        {/* ETA em retângulo alinhado no fim */}
+        <div className="mt-2">
+          <div className="w-fit rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-600">
+            {etaTxt}
+          </div>
         </div>
       </div>
     </Link>
