@@ -10,6 +10,13 @@ type StoreCard = {
   slug: string; // slug + id, garantidamente único
 };
 
+type RpcStoreRow = {
+  store_id: number | null;
+  store_name?: string | null;
+  brand_name?: string | null;
+  city?: string | null;
+};
+
 function slugify(name: string) {
   return name
     .toLowerCase()
@@ -53,7 +60,7 @@ async function fetchAllStoresForUser(): Promise<StoreCard[]> {
   }
 
   const list: StoreCard[] = (data ?? [])
-    .map((r: any): StoreCard | null => {
+    .map((r: RpcStoreRow): StoreCard | null => {
       const id = Number(r.store_id);
       if (!id) return null;
       const name = displayStoreName({
@@ -130,8 +137,8 @@ export default function StoresPage() {
         // 2) Fallback
         const fallback = await fetchStoresFromProducts();
         setStores(fallback);
-      } catch (e: any) {
-        setErr(e?.message ?? "Não foi possível carregar as lojas");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Não foi possível carregar as lojas");
       } finally {
         setLoading(false);
       }
@@ -177,9 +184,7 @@ export default function StoresPage() {
         {stores.map((s) => (
           <Link
             key={s.slug} // agora único por conta do "-id"
-            href={`/stores/${s.slug}?n=${encodeURIComponent(s.name)}&sid=${
-              s.id
-            }`}
+            href={`/stores/${s.slug}?n=${encodeURIComponent(s.name)}&sid=${s.id}`}
             title={s.name}
             className="group rounded-2xl border h-28 transition
                        bg-[#141414] border-[#141414]
