@@ -111,7 +111,7 @@ export default function ProductPage() {
         setUserId(u?.user?.id ?? null);
 
         // 1) tenta a VIEW com ETA dinâmico
-        let view = await supabase
+        const view = await supabase
           .from("products_with_runtime_eta")
           .select(
             "id,name,store_name,photo_url,eta_text_runtime,eta_text,price_tag,sizes"
@@ -131,8 +131,8 @@ export default function ProductPage() {
         } else {
           setProduct(view.data as Product);
         }
-      } catch (e: any) {
-        setErr(e.message ?? "Erro ao carregar produto");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Erro ao carregar produto");
       } finally {
         setLoading(false);
       }
@@ -199,12 +199,30 @@ export default function ProductPage() {
           .order("created_at", { ascending: false });
 
         if (error) throw error;
-        const list: CommentView[] = (data || []).map((row: any) => ({
-          id: row.id,
-          content: row.content,
-          created_at: row.created_at,
-          displayName: formatDisplayName(row.user_profiles?.name),
-        }));
+        type CommentRow = {
+          id: string;
+          content: string;
+          created_at: string;
+          // pode vir como objeto único OU como array de objetos
+          user_profiles?:
+            | { name?: string | null }
+            | Array<{ name?: string | null }>
+            | null;
+        };
+
+        const list: CommentView[] = (data ?? []).map((row: CommentRow) => {
+          const up = row.user_profiles;
+          const name =
+            Array.isArray(up) ? up[0]?.name ?? null : up?.name ?? null;
+        
+          return {
+            id: row.id,
+            content: row.content,
+            created_at: row.created_at,
+            displayName: formatDisplayName(name),
+          };
+        });        
+
         setComments(list);
       } catch {
         setComments([]);
@@ -281,8 +299,8 @@ export default function ProductPage() {
           throw error;
         }
       }
-    } catch (e: any) {
-      showToast(e?.message ?? "Erro ao curtir");
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : "Erro ao curtir");
     } finally {
       setLikeBusy(false);
     }
@@ -330,8 +348,10 @@ export default function ProductPage() {
         ...prev,
       ]);
       setNewComment("");
-    } catch (e: any) {
-      showToast(e?.message ?? "Não foi possível enviar o comentário");
+    } catch (e: unknown) {
+      showToast(
+        e instanceof Error ? e.message : "Não foi possível enviar o comentário"
+      );
     } finally {
       setPosting(false);
     }
@@ -581,9 +601,8 @@ export default function ProductPage() {
             {product.name}
           </h1>
           <div className="text-right">
-            <div className="text-[20px] leading-6 font-bold">
-              {formatBRL(product.price_tag)}
-            </div>
+            <div className="text-[20px] leading-6 font-bold">{price}</div>
+
             <div className="text-[11px] text-gray-500">
               {product.eta_text_runtime ?? product.eta_text ?? "até 1h"}
             </div>
@@ -714,9 +733,7 @@ export default function ProductPage() {
         <div className="mx-auto max-w-md px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Subtotal</span>
-            <span className="text-base font-semibold">
-              {formatBRL(product.price_tag)}
-            </span>
+            <span className="text-base font-semibold">{price}</span>
           </div>
           <button
             onClick={handleAddToBag}
