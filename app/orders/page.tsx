@@ -15,9 +15,9 @@ type Order = {
     Notes?: string;
 
     // fontes possíveis dos itens/imagens
-    Items?: string | any[] | null; // normalmente JSON string
-    items?: string | any[] | null;
-    products?: string | any[] | null;
+    Items?: string | unknown[] | null; // normalmente JSON string
+    items?: string | unknown[] | null;
+    products?: string | unknown[] | null;
     photo_url?: string | string[] | null; // fallback
   };
 };
@@ -28,11 +28,27 @@ type OrderItem = {
   qty?: number | null;
   photo_url?: string | string[] | null;
 };
+// itens possíveis vindos do Airtable / JSON
+type ParsedItem = {
+  name?: string;
+  Name?: string;
+  store_name?: string;
+  brand?: string;
+  Store?: string;
+  qty?: number;
+  quantity?: number;
+  photo_url?: unknown;
+  image?: unknown;
+  Images?: unknown;
+};
 
 // ------------ Utils UI ------------
 function formatBRL(v?: number) {
   try {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v ?? 0);
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(v ?? 0);
   } catch {
     return `R$ ${(v ?? 0).toFixed(2)}`;
   }
@@ -40,34 +56,100 @@ function formatBRL(v?: number) {
 function formatDate(d?: string) {
   if (!d) return "";
   const dt = new Date(d);
-  return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  return dt.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 // badge
-const STATUS_STYLES: Record<string, { bg: string; text: string; ring: string }> = {
-  novo: { bg: "bg-neutral-900", text: "text-white", ring: "ring-neutral-900/10" },
-  recebido: { bg: "bg-neutral-800", text: "text-white", ring: "ring-neutral-800/10" },
-  "em separação": { bg: "bg-amber-900", text: "text-amber-50", ring: "ring-amber-900/10" },
-  "saiu para entrega": { bg: "bg-indigo-900", text: "text-indigo-50", ring: "ring-indigo-900/10" },
-  entregue: { bg: "bg-emerald-900", text: "text-emerald-50", ring: "ring-emerald-900/10" },
+const STATUS_STYLES: Record<
+  string,
+  { bg: string; text: string; ring: string }
+> = {
+  novo: {
+    bg: "bg-neutral-900",
+    text: "text-white",
+    ring: "ring-neutral-900/10",
+  },
+  recebido: {
+    bg: "bg-neutral-800",
+    text: "text-white",
+    ring: "ring-neutral-800/10",
+  },
+  "em separação": {
+    bg: "bg-amber-900",
+    text: "text-amber-50",
+    ring: "ring-amber-900/10",
+  },
+  "saiu para entrega": {
+    bg: "bg-indigo-900",
+    text: "text-indigo-50",
+    ring: "ring-indigo-900/10",
+  },
+  entregue: {
+    bg: "bg-emerald-900",
+    text: "text-emerald-50",
+    ring: "ring-emerald-900/10",
+  },
   cancelado: { bg: "bg-red-900", text: "text-red-50", ring: "ring-red-900/10" },
 };
 function StatusBadge({ status }: { status?: string }) {
   const key = (status || "").toLowerCase();
-  const style = STATUS_STYLES[key] || { bg: "bg-neutral-200", text: "text-neutral-800", ring: "ring-neutral-200" };
+  const style = STATUS_STYLES[key] || {
+    bg: "bg-neutral-200",
+    text: "text-neutral-800",
+    ring: "ring-neutral-200",
+  };
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 h-7 text-xs font-medium ${style.bg} ${style.text} ring-1 ${style.ring}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 h-7 text-xs font-medium ${style.bg} ${style.text} ring-1 ${style.ring}`}
+    >
       {status || "—"}
     </span>
   );
 }
 
 // ------------ Parse dos itens / thumb ------------
-function safeParseJSON<T = any>(v: unknown): T | null {
+function safeParseJSON<T = unknown>(v: unknown): T | null {
   if (typeof v === "string") {
-    try { return JSON.parse(v) as T; } catch { return null; }
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return null;
+    }
   }
   if (Array.isArray(v) || (v && typeof v === "object")) return v as T;
+  return null;
+}
+function normalizePhoto(v: unknown): string | string[] | null {
+  if (!v) return null;
+
+  // string direta
+  if (typeof v === "string") return v;
+
+  // array: pode ser de strings ou objetos { url }
+  if (Array.isArray(v)) {
+    const urls = v
+      .map((x) => {
+        if (typeof x === "string") return x;
+        if (x && typeof x === "object" && "url" in x) {
+          const u = (x as { url?: string }).url;
+          return typeof u === "string" ? u : null;
+        }
+        return null;
+      })
+      .filter((u): u is string => typeof u === "string");
+    return urls.length ? urls : null;
+  }
+
+  // objeto único { url }
+  if (typeof v === "object" && "url" in (v as object)) {
+    const u = (v as { url?: string }).url;
+    return typeof u === "string" ? u : null;
+  }
+
   return null;
 }
 
@@ -75,26 +157,28 @@ function extractItems(o: Order): OrderItem[] {
   const f = o.fields || {};
   const sources = [f.Items, f.items, f.products];
   for (const src of sources) {
-    const parsed = safeParseJSON<any[]>(src);
+    const parsed = safeParseJSON<ParsedItem[]>(src);
     if (Array.isArray(parsed) && parsed.length) {
       // normaliza cada item
-      return parsed.map((it) => ({
+      return parsed.map((it: ParsedItem) => ({
         name: it?.name ?? it?.Name ?? null,
         store_name: it?.store_name ?? it?.brand ?? it?.Store ?? null,
         qty: Number(it?.qty ?? it?.quantity ?? 1) || 1,
-        photo_url: it?.photo_url ?? it?.image ?? it?.Images ?? null,
+        photo_url: normalizePhoto(it?.photo_url ?? it?.image ?? it?.Images),
       }));
     }
   }
   return [];
 }
 
-function pickThumbFromItemPhoto(ph: any): string | null {
+function pickThumbFromItemPhoto(ph: unknown): string | null {
   if (!ph) return null;
   if (Array.isArray(ph)) {
-    const first = ph[0];
+    const first = ph[0] as unknown;
     if (typeof first === "string" && first.startsWith("http")) return first;
-    if (first?.url) return String(first.url);
+    if (first && typeof first === "object" && "url" in first) {
+      return String((first as { url?: string }).url ?? "");
+    }
   } else if (typeof ph === "string" && ph.startsWith("http")) {
     return ph;
   }
@@ -151,8 +235,8 @@ export default function OrdersPage() {
         setEmail(user.email);
         const data = await listOrders(user.email);
         setOrders(data);
-      } catch (e: any) {
-        setErr(e?.message ?? "Erro ao carregar pedidos");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Erro ao carregar pedidos");
       } finally {
         setLoading(false);
       }
@@ -164,17 +248,31 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="pt-6 flex items-start justify-between">
         <div>
-          <h1 className="text-[28px] leading-7 font-bold tracking-tight">Meus pedidos</h1>
+          <h1 className="text-[28px] leading-7 font-bold tracking-tight">
+            Meus pedidos
+          </h1>
           <p className="text-[12px] text-neutral-600">
-            {email ? email : "—"} • {orders.length} {orders.length === 1 ? "pedido" : "pedidos"}
+            {email ? email : "—"} • {orders.length}{" "}
+            {orders.length === 1 ? "pedido" : "pedidos"}
           </p>
         </div>
         <Link
           href="/"
           className="inline-flex h-9 items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 text-sm hover:bg-neutral-50"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none">
-            <path d="M15 18l-6-6 6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            fill="none"
+          >
+            <path
+              d="M15 18l-6-6 6-6"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           Início
         </Link>
@@ -183,10 +281,14 @@ export default function OrdersPage() {
       {/* Estados */}
       {err && (
         <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-900">
-          <div className="text-sm font-semibold">Não foi possível carregar seus pedidos</div>
+          <div className="text-sm font-semibold">
+            Não foi possível carregar seus pedidos
+          </div>
           <p className="text-xs mt-1">{err}</p>
           <div className="mt-3">
-            <Link href="/" className="text-sm underline">Voltar para a home</Link>
+            <Link href="/" className="text-sm underline">
+              Voltar para a home
+            </Link>
           </div>
         </div>
       )}
@@ -194,7 +296,10 @@ export default function OrdersPage() {
       {loading && (
         <div className="mt-5 space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={`sk-${i}`} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm overflow-hidden">
+            <div
+              key={`sk-${i}`}
+              className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm overflow-hidden"
+            >
               <div className="flex gap-3">
                 <div className="h-16 w-16 rounded-xl bg-neutral-200 animate-pulse" />
                 <div className="flex-1 min-w-0">
@@ -213,8 +318,12 @@ export default function OrdersPage() {
           <div className="mx-auto h-12 w-12 rounded-full bg-neutral-100 flex items-center justify-center">
             <span className="text-neutral-500">🧾</span>
           </div>
-          <h2 className="mt-3 text-base font-semibold">Você ainda não tem pedidos</h2>
-          <p className="mt-1 text-sm text-neutral-600">Explore as novidades e faça seu primeiro pedido em minutos.</p>
+          <h2 className="mt-3 text-base font-semibold">
+            Você ainda não tem pedidos
+          </h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Explore as novidades e faça seu primeiro pedido em minutos.
+          </p>
           <div className="mt-4">
             <Link
               href="/"
@@ -254,7 +363,9 @@ export default function OrdersPage() {
                         decoding="async"
                       />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-neutral-400">👜</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-neutral-400">
+                        👜
+                      </div>
                     )}
                   </div>
 
@@ -265,7 +376,9 @@ export default function OrdersPage() {
                         <div className="text-sm font-semibold leading-5 line-clamp-2">
                           {title}
                         </div>
-                        <div className="mt-0.5 text-xs text-neutral-600">{created}</div>
+                        <div className="mt-0.5 text-xs text-neutral-600">
+                          {created}
+                        </div>
                       </div>
                       <StatusBadge status={status} />
                     </div>
