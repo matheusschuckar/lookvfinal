@@ -51,9 +51,6 @@ export default function ProductPage() {
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // fullscreen da imagem
-  const [showFull, setShowFull] = useState(false);
-
   // auth id (para like/comentário)
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -69,14 +66,13 @@ export default function ProductPage() {
   const [newComment, setNewComment] = useState("");
   const [posting, setPosting] = useState(false);
 
-  // carrossel
+  // carrossel (inline)
   const [idx, setIdx] = useState(0);
+  const startX = useRef<number | null>(null);
   const go = (d: number) => {
     if (images.length === 0) return;
     setIdx((p) => (p + d + images.length) % images.length);
   };
-  // swipe
-  const startX = useRef<number | null>(null);
   function onTouchStart(e: React.TouchEvent) {
     startX.current = e.changedTouches[0].clientX;
   }
@@ -86,6 +82,25 @@ export default function ProductPage() {
     if (delta > 40) go(-1);
     if (delta < -40) go(+1);
     startX.current = null;
+  }
+
+  // FULLSCREEN viewer
+  const [fsOpen, setFsOpen] = useState(false);
+  const [fsIdx, setFsIdx] = useState(0);
+  const fsStartX = useRef<number | null>(null);
+  const fsGo = (d: number) => {
+    if (images.length === 0) return;
+    setFsIdx((p) => (p + d + images.length) % images.length);
+  };
+  function onFsTouchStart(e: React.TouchEvent) {
+    fsStartX.current = e.changedTouches[0].clientX;
+  }
+  function onFsTouchEnd(e: React.TouchEvent) {
+    if (fsStartX.current == null) return;
+    const delta = e.changedTouches[0].clientX - fsStartX.current;
+    if (delta > 40) fsGo(-1);
+    if (delta < -40) fsGo(+1);
+    fsStartX.current = null;
   }
 
   // toast helper
@@ -366,12 +381,17 @@ export default function ProductPage() {
           </svg>
         </button>
 
-        {/* Slide area: 4/5, sem “retângulo” lateral. Toque abre fullscreen */}
+        {/* Slide area: 4/5, clicável para abrir fullscreen */}
         <div
           className="relative w-full aspect-[4/5] overflow-hidden"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          onClick={() => setShowFull(true)}
+          onClick={() => {
+            setFsIdx(idx);
+            setFsOpen(true);
+            // trava scroll por segurança
+            document.documentElement.style.overflow = "hidden";
+          }}
         >
           {images.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
@@ -402,7 +422,10 @@ export default function ProductPage() {
                 <button
                   aria-label={liked ? "Remover like" : "Dar like"}
                   disabled={likeBusy}
-                  onClick={toggleLike}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleLike();
+                  }}
                   className={`h-11 w-11 rounded-full border border-white/60 bg-white/80 backdrop-blur flex items-center justify-center active:scale-95 transition ${
                     likePulse ? "scale-110" : "scale-100"
                   }`}
@@ -422,7 +445,10 @@ export default function ProductPage() {
                     </svg>
                   )}
                 </button>
-                <span className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60">
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60"
+                >
                   {likeCount}
                 </span>
               </>
@@ -430,6 +456,7 @@ export default function ProductPage() {
               <>
                 <div
                   aria-label="Likes"
+                  onClick={(e) => e.stopPropagation()}
                   className="h-11 w-11 rounded-full border border-white/60 bg-white/60 backdrop-blur flex items-center justify-center opacity-80"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -441,7 +468,10 @@ export default function ProductPage() {
                     />
                   </svg>
                 </div>
-                <span className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60">
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  className="px-2 py-1 rounded-full bg-white/85 backdrop-blur text-xs font-medium border border-white/60"
+                >
                   {likeCount}
                 </span>
               </>
@@ -450,27 +480,13 @@ export default function ProductPage() {
 
           {/* dots */}
           {images.length > 1 && (
-            <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5">
+            <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center gap-1.5 pointer-events-none">
               {images.map((_, i) => (
                 <span key={i} className={`h-1.5 w-1.5 rounded-full ${i === idx ? "bg-white" : "bg-white/50"}`} />
               ))}
             </div>
           )}
         </div>
-
-        {/* Fullscreen overlay da imagem (tap para abrir/fechar) */}
-        {showFull && (
-          <div
-            className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center"
-            onClick={() => setShowFull(false)}
-          >
-            <img
-              src={images[0]}
-              alt={product.name}
-              className="max-h-[90vh] max-w-[90vw] object-contain"
-            />
-          </div>
-        )}
       </div>
 
       {/* Conteúdo */}
@@ -490,7 +506,7 @@ export default function ProductPage() {
         {/* ETA em chip suave */}
         <div className="mt-2">
           <span className="inline-flex items-center h-8 px-3 rounded-full text-[12px] bg-neutral-100 text-neutral-700 border border-neutral-200">
-            {product.eta_text_runtime ?? product.eta_text ?? "até 1 hora"}
+            {etaText}
           </span>
         </div>
 
@@ -622,7 +638,7 @@ export default function ProductPage() {
                 rows={3}
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Escreva um comentário sobre o produto!"
+                placeholder="Escreva um comentário (seja gentil ✨)"
                 className="w-full rounded-xl border border-gray-300 bg-white p-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10"
               />
               <div className="mt-2 flex items-center justify-between">
@@ -646,7 +662,7 @@ export default function ProductPage() {
         </div>
       </section>
 
-      {/* CTA fixo no rodapé com área segura — sem subtotal */}
+      {/* CTA fixo no rodapé (sem subtotal) */}
       <div className="fixed inset-x-0 bottom-0 z-[120] bg-[#fdfcfb] border-t border-neutral-200">
         <div className="mx-auto max-w-md px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
           <button
@@ -660,6 +676,81 @@ export default function ProductPage() {
           </button>
         </div>
       </div>
+
+      {/* FULLSCREEN viewer */}
+      {fsOpen && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/95"
+          onTouchStart={onFsTouchStart}
+          onTouchEnd={onFsTouchEnd}
+          onClick={() => {
+            setFsOpen(false);
+            document.documentElement.style.overflow = "";
+          }}
+        >
+          {/* fecha */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setFsOpen(false);
+              document.documentElement.style.overflow = "";
+            }}
+            aria-label="Fechar"
+            className="absolute left-3 top-3 z-[210] h-10 w-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white active:scale-95"
+          >
+            ✕
+          </button>
+
+          {/* setas */}
+          {images.length > 1 && (
+            <>
+              <button
+                aria-label="Anterior"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fsGo(-1);
+                }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-[210] h-10 w-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white active:scale-95"
+              >
+                ‹
+              </button>
+              <button
+                aria-label="Próximo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fsGo(+1);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-[210] h-10 w-10 flex items-center justify-center rounded-full bg-white/10 border border-white/20 text-white active:scale-95"
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          {/* imagem atual (abre no índice corrente) */}
+          <div className="absolute inset-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {images.length ? (
+              <img
+                src={images[fsIdx]}
+                alt={`${product.name} - ${fsIdx + 1}`}
+                className="max-h-[92vh] max-w-[92vw] object-contain rounded-lg"
+              />
+            ) : null}
+          </div>
+
+          {/* dots */}
+          {images.length > 1 && (
+            <div className="absolute bottom-4 left-0 right-0 z-[210] flex justify-center gap-1.5">
+              {images.map((_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-full ${i === fsIdx ? "bg-white" : "bg-white/40"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
