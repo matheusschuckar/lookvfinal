@@ -15,7 +15,7 @@ type ChipsRowProps = {
   openFilter: () => void;
 
   onBumpCategory: (c: string, w: number) => void;
-  onToggleGender: (g: "female" | "male") => void; // 👈 novo
+  onToggleGender: (g: "female" | "male") => void;
 };
 
 export default function ChipsRow({
@@ -36,14 +36,14 @@ export default function ChipsRow({
       {[...selectedCategories].map((c) => (
         <span
           key={`c-${c}`}
-          className="px-3 h-9 rounded-full border text-sm capitalize bg-[#141414] text-white border-[#141414]"
+          className="inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none capitalize bg-[#141414] text-white border-[#141414]"
         >
           {c}
         </span>
       ))}
 
       {selectedCategories.size === 0 && chipCategory !== "Tudo" && (
-        <span className="px-3 h-9 rounded-full border text-sm capitalize bg-[#141414] text-white border-[#141414]">
+        <span className="inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none capitalize bg-[#141414] text-white border-[#141414]">
           {chipCategory}
         </span>
       )}
@@ -51,7 +51,7 @@ export default function ChipsRow({
       {[...selectedGenders].map((g) => (
         <span
           key={`g-${g}`}
-          className="px-3 h-9 rounded-full border text-sm bg-[#141414] text-white border-[#141414]"
+          className="inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none bg-[#141414] text-white border-[#141414]"
         >
           {g === "female" ? "Feminino" : "Masculino"}
         </span>
@@ -60,7 +60,7 @@ export default function ChipsRow({
       {[...selectedSizes].map((s) => (
         <span
           key={`s-${s}`}
-          className="px-3 h-9 rounded-full border text-sm bg-[#141414] text-white border-[#141414]"
+          className="inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none bg-[#141414] text-white border-[#141414]"
         >
           {s}
         </span>
@@ -69,7 +69,7 @@ export default function ChipsRow({
       <button
         type="button"
         onClick={clearFilters}
-        className="px-3 h-9 rounded-full border text-sm bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
+        className="inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
       >
         Limpar tudo
       </button>
@@ -89,7 +89,7 @@ export default function ChipsRow({
                   setChipCategory(c);
                   onBumpCategory(c, 0.8);
                 }}
-                className={`px-3 h-9 rounded-full border text-sm whitespace-nowrap transition ${
+                className={`inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none whitespace-nowrap transition ${
                   active
                     ? "text-white bg-[#141414] border-[#141414]"
                     : "surface border-warm text-gray-800 hover:opacity-95"
@@ -109,9 +109,9 @@ export default function ChipsRow({
             return (
               <button
                 key={`gender-${g.id}`}
-                onClick={() => onToggleGender(g.id)} // 👈 agora é clicável
+                onClick={() => onToggleGender(g.id)}
                 aria-pressed={active}
-                className={`px-3 h-9 rounded-full border text-sm whitespace-nowrap transition ${
+                className={`inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none whitespace-nowrap transition ${
                   active
                     ? "text-white bg-[#141414] border-[#141414]"
                     : "surface border-warm text-gray-800 hover:opacity-95"
@@ -132,7 +132,7 @@ export default function ChipsRow({
                   setChipCategory(c);
                   onBumpCategory(c, 0.8);
                 }}
-                className={`px-3 h-9 rounded-full border text-sm whitespace-nowrap transition ${
+                className={`inline-flex items-center justify-center px-3 h-9 rounded-full border text-sm leading-none whitespace-nowrap transition ${
                   active
                     ? "text-white bg-[#141414] border-[#141414]"
                     : "surface border-warm text-gray-800 hover:opacity-95"
@@ -148,7 +148,7 @@ export default function ChipsRow({
       <button
         type="button"
         onClick={openFilter}
-        className="ml-2 inline-flex items-center gap-1 h-9 px-3 rounded-full border text-sm border-[#141414] text-[#141414] hover:bg-[#141414]/10"
+        className="ml-2 inline-flex items-center gap-1 h-9 px-3 rounded-full border text-sm leading-none border-[#141414] text-[#141414] hover:bg-[#141414]/10"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M3 6h18M7 12h10M10 18h4" strokeWidth="2" strokeLinecap="round" />
