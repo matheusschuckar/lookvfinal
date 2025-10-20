@@ -12,7 +12,10 @@ import { BannersCarousel, type Banner } from "../components/BannersCarousel";
 import {
   EditorialTallBanner,
   SelectionHeroBanner,
+  // + novo
+  PersonalShopperBanner,
 } from "../components/HomeBanners";
+
 import HeaderBar from "../components/HeaderBar";
 import AppDrawer from "../components/AppDrawer";
 import type { Product, Profile } from "@/lib/data/types";
@@ -614,7 +617,8 @@ export default function Home() {
       )}
 
       {!loading && <BannersCarousel banners={banners} />}
-
+      {/* NOVO: banner Personal Shopper abaixo do primeiro banner */}
+      {!loading && <PersonalShopperBanner href="https://wa.me/5511966111233" />}
       {!loading && (
         <ChipsRow
           anyActiveFilter={anyActiveFilter}
