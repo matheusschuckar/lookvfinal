@@ -175,9 +175,10 @@ export default function StorePage() {
           setStore(found);
           setProducts((prodRows ?? []) as Product[]);
         }
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message || "Erro ao carregar");
-      } finally {
+    } catch (e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (!cancelled) setErr(msg || "Erro ao carregar");
+} finally {
         if (!cancelled) setLoading(false);
       }
     }
@@ -192,9 +193,6 @@ export default function StorePage() {
     const s = new Set(products.map((p) => (p.category || "").toLowerCase()).filter(Boolean));
     return Array.from(s).sort();
   }, [products]);
-
-  const anyFilterActive =
-    selectedGenders.size > 0 || selectedSizes.size > 0 || selectedCategories.size > 0;
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -379,7 +377,7 @@ export default function StorePage() {
             )
           )}
 
-          {renderGridFixed(products)}
+          {renderGridFixed(filtered)}
         </div>
       )}
     </main>
